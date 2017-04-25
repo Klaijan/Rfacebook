@@ -1,0 +1,13 @@
+#addata_all = addata
+
+addata_all = rbind(addata_all, addata, fill = TRUE)
+
+totabl = as.data.frame(addata_all)
+save(totabl, file = "fbdashboard.RData")
+
+
+# write csv file
+file <- sprintf("fbdashboard_output_%s" , Sys.Date()-1)
+Sys.sleep(1)
+setwd("//bk-agfil-1001/Department/MK/Demand Innovation/Social and Display Experiments/Insights/2017 Q1 IDN Campaign")
+write.table(addata_all , paste0(file,".csv") , row.names = FALSE , sep = "," )
