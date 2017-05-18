@@ -1,0 +1,307 @@
+
+#PRODUCTION CODE FOR CO0tT PULLING FROM FACEBOOK#
+library("httr")
+library("fbRads")
+library("curl")
+library("jsonlite")
+
+library("data.table")
+library("magrittr")
+library("dplyr")
+library("tidyr")
+library("stringr")
+
+all_actions = NULL
+all_vid10s = NULL
+all_vid30s = NULL
+all_vidp25 = NULL
+all_vidp50 = NULL
+all_vidp75 = NULL
+all_vidp95 = NULL
+
+load(file = "fbdashboard.RData")
+addata_all = totabl
+
+since = as.Date(tail(addata_all$date_start,1))+1
+until = Sys.Date()-1
+
+timerange = paste("{'since':'",since,"','until':'",until,"'}", sep = "")
+
+#IF TOKEN IS CHANGED THEN RERUN THE API IN THE TEST VERSION TO GET NEW TOKEN
+tkn <- 'EAAHtSDj2DpMBAFN3inZCCxc8Q5DPwqyhji37jAnwAFrmoUFZCyZBQZB5T6ebGOLNlWJRvvW3MrOzRwJp9sFlmHX5snZCuvyhtS7tIPstF8MZCkSZCVMPYGs8hI5PmU8J3T3vPCtqHPSirqXYVH4jfp9eNS1LuVorkqMq6YJ8BfyfQZDZD'
+
+#NOTE THAT ONLY HTTR V1.1.0 WILL WORK 
+
+
+Sys.setenv('HTTR_SERVER_PORT' = '1410/')
+sessionInfo()
+
+
+app <- oauth_app('facebook', '542369425788563', '67c2922f40820a96ec04e9db4d2ce018')
+
+#Get data for every ads account in acc
+data.all <- data.frame()
+acc <- c('10153324241741874')
+
+fbacc <- fbad_init(accountid = acc[1], token = tkn, version = '2.8')
+
+addata <- do.call("bind_rows",fb_insights(fbacc, time_range = timerange, time_increment = 1, level = 'ad', 
+                                          fields = toJSON(c( 'date_start','ad_name','ad_id', 'adset_name','campaign_name','impressions', 
+                                                             'reach', 'spend', 'actions', 'video_10_sec_watched_actions', 'video_30_sec_watched_actions', 
+                                                             'video_p25_watched_actions', 'video_p50_watched_actions', 'video_p75_watched_actions',
+'video_p95_watched_actions'))))
+
+#"{'since':'YYYY-MM-DD','until':'YYYY-MM-DD'}"
+#time_range = "{'since':'2017-04-15','until':'2017-04-17'}"
+#date_preset = 'yesterday'
+
+#put addata into table
+addata = addata %>% data.table
+
+#create key column for binding two data sets; addata and temp1
+addata$key = paste0(addata$date_start,'_', addata$ad_id)
+
+
+adv_with = function(ucname){
+  ifelse(grepl("_", ucname), return (regexpr("_", ucname)+1 %>%  as.numeric()), return (1))
+}
+
+str_start = function(ucname, title){ #ucname = uncleaned name; title = abbrv of title (PH, CV,...)
+  ifelse(grepl(title, ucname), return (regexpr(title, ucname)+ nchar(title) %>%  as.numeric()), return (-1))
+}
+
+str_ends = function(ucname, title){ #ucname = uncleaned name; title = abbrv of title (PH, CV,...)
+  ifelse(grepl(title, ucname), return (regexpr("_", ucname)-1 %>%  as.numeric()), return (-1))
+}
+
+#Campaign
+addata$nametemp = addata$campaign_name
+
+
+addata$Campaign = substr(addata$nametemp, regexpr("CA",addata$nametemp)+3, regexpr("_", addata$nametemp)-1)
+addata$nametemp = substr(addata$nametemp, regexpr("_", addata$nametemp) + 1, nchar(addata$nametemp))
+
+addata$Phase = substr(addata$nametemp, regexpr("PH",addata$nametemp)+3, regexpr("_", addata$nametemp)-1)
+addata$nametemp = substr(addata$nametemp, regexpr("_", addata$nametemp) + 1, nchar(addata$nametemp))
+
+addata$Channel = substr(addata$nametemp, regexpr("C",addata$nametemp)+2, regexpr("_", addata$nametemp)-1)
+addata$nametemp = substr(addata$nametemp, regexpr("_", addata$nametemp) + 1, nchar(addata$nametemp))
+
+#Adset
+
+
+addata$nametemp = substr(addata$adset_name, regexpr("_A-", addata$adset_name)+1, nchar(addata$adset_name))
+#addata$nametemp = ifelse(str_detect(addata$adset_name, "_A"),  substr(addata$adset_name, regexpr("_A", addata$adset_name)+1, nchar(addata$adset_name)), addata$ad_name)
+addata$nametemp = paste0(addata$nametemp, "_")
+
+
+addata$Audience = ifelse ( str_detect(addata$nametemp,"A-"), substr(addata$nametemp, str_start(addata$nametemp, "A-"), str_ends(addata$nametemp, "A-")),"")
+addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+
+addata$Placement = ifelse ( str_detect(addata$nametemp,"PL-"), substr(addata$nametemp, str_start(addata$nametemp, "PL-"), str_ends(addata$nametemp, "PL-")),"")
+addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+  
+addata$Geo = ifelse ( str_detect(addata$nametemp,"G-"), substr(addata$nametemp, str_start(addata$nametemp, "G-"), str_ends(addata$nametemp, "_G-")),"")
+addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+
+addata$Language = ifelse( str_detect(addata$nametemp,"_L-"), substr(addata$nametemp, str_start(addata$nametemp, "_L-"), str_ends(addata$nametemp, "_L-")),"")
+addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+
+
+#Advert
+#addata$nametemp = substr(addata$ad_name, regexpr("_CR", addata$ad_name)+1, nchar(addata$ad_name))
+addata$nametemp = ifelse(str_detect(addata$ad_name, "_CR"),  substr(addata$ad_name, regexpr("_CR", addata$ad_name)+1, nchar(addata$ad_name)), addata$ad_name)
+addata$nametemp = paste0(addata$nametemp, "_")
+
+addata$Creative = ifelse ( str_detect(addata$nametemp,"CR-"), substr(addata$nametemp, str_start(addata$nametemp, "CR-"), str_ends(addata$nametemp, "CR-")),"")
+#addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+addata$nametemp = ifelse(str_detect(addata$ad_name, "CR-"),  substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
+
+#shitty coded, will clean later
+addata$nametemp = ifelse(str_detect(addata$nametemp, "CV-"), substr(addata$nametemp, regexpr("CV-", addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
+addata$Copy_variant = ifelse ( str_detect(addata$nametemp,"CV-"), substr(addata$nametemp, str_start(addata$nametemp, "CV-"), str_ends(addata$nametemp, "CV-")),"")
+addata$nametemp = ifelse(str_detect(addata$ad_name, "CV"),  substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
+
+addata$Creative_type = ifelse ( str_detect(addata$nametemp,"CT"), substr(addata$nametemp, str_start(addata$nametemp, "CT-"), str_ends(addata$nametemp, "CT-")),"")
+addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+
+addata$Content_pillar = ifelse ( str_detect(addata$nametemp,"CP"), substr(addata$nametemp, str_start(addata$nametemp, "CP-"), str_ends(addata$nametemp, "CP-")),"")
+addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+
+addata$nametemp = NULL
+
+#add key to actions
+for(i in 1:nrow(addata)){
+  if(!is.null(addata$actions[[i]])) {
+    temp1 =  addata$actions[[i]]
+    temp1$key = addata$key[[i]]
+    addata$actions[[i]] = temp1
+  }
+}
+
+#add key to video 10 sec
+for(i in 1:nrow(addata)){
+  if(!is.null(addata$video_10_sec_watched_actions[[i]])) {
+    temp2 =  addata$video_10_sec_watched_actions[[i]]
+    temp2$key = addata$key[[i]]
+    addata$video_10_sec_watched_actions[[i]] = temp2
+  }
+}
+
+#add key to video 25%
+for(i in 1:nrow(addata)){
+  if(!is.null(addata$video_p25_watched_actions[[i]])) {
+    temp3 =  addata$video_p25_watched_actions[[i]]
+    temp3$key = addata$key[[i]]
+    addata$video_p25_watched_actions[[i]] = temp3
+  }
+}
+
+#add key to video 50%
+for(i in 1:nrow(addata)){
+  if(!is.null(addata$video_p50_watched_actions[[i]])) {
+    temp4 =  addata$video_p50_watched_actions[[i]]
+    temp4$key = addata$key[[i]]
+    addata$video_p50_watched_actions[[i]] = temp4
+  }
+}
+
+#add key to video 75%
+for(i in 1:nrow(addata)){
+  if(!is.null(addata$video_p75_watched_actions[[i]])) {
+    temp5 =  addata$video_p75_watched_actions[[i]]
+    temp5$key = addata$key[[i]]
+    addata$video_p75_watched_actions[[i]] = temp5
+  }
+}
+
+#add key to video 95%
+for(i in 1:nrow(addata)){
+  if(!is.null(addata$video_p95_watched_actions[[i]])) {
+    temp6 =  addata$video_p95_watched_actions[[i]]
+    temp6$key = addata$key[[i]]
+    addata$video_p95_watched_actions[[i]] = temp6
+  }
+}
+
+
+#add key to video 30 sec
+for(i in 1:nrow(addata)){
+  if(!is.null(addata$video_30_sec_watched_actions[[i]])) {
+    temp7 =  addata$video_30_sec_watched_actions[[i]]
+    temp7$key = addata$key[[i]]
+    addata$video_30_sec_watched_actions[[i]] = temp7
+  }
+}
+
+
+all_actions<-do.call(rbind.data.frame,addata$actions)
+
+if(!is.null(addata$video_10_sec_watched_actions)){
+  all_vid10s<-do.call(rbind.data.frame,addata$video_10_sec_watched_actions)
+  all_vid30s<-do.call(rbind.data.frame,addata$video_30_sec_watched_actions)
+  all_vidp25<-do.call(rbind.data.frame,addata$video_p25_watched_actions)
+  all_vidp50<-do.call(rbind.data.frame,addata$video_p50_watched_actions)
+  all_vidp75<-do.call(rbind.data.frame,addata$video_p75_watched_actions)
+  all_vidp95<-do.call(rbind.data.frame,addata$video_p95_watched_actions)
+}
+
+col_actions = list("link_click", "post_reaction", "post", "like", "offsite_conversion.fb_pixel_purchase", "mobile_app_install",  "page_engagement","post_engagement","offsite_conversion.fb_pixel_view_content", "video_view")
+
+#apply all_actions on addata
+for(i in 1:length(col_actions)){
+  tempdf = data.frame(all_actions[all_actions$action_type == col_actions[i], ])
+  names(tempdf)[2] = toString(col_actions[i])
+  tempdf$action_type = NULL #delete action_type column
+  addata = merge(addata, tempdf, by="key", all = TRUE)
+  addata[is.na(addata)] = 0
+}
+
+
+if(sum(addata$video_view %>% as.numeric) != 0) { #if not 0 then apply this, if 0 then skip this
+
+#apply all_vid10s on addata
+tempdf = data.frame(all_vid10s)
+names(tempdf)[2] = '10s_view'
+tempdf$action_type = NULL
+addata = merge(addata, tempdf, by="key", all = TRUE)
+addata[is.na(addata)] = 0
+
+
+#apply all_vid30s on addata
+tempdf = data.frame(all_vid10s)
+names(tempdf)[2] = '30s_view'
+tempdf$action_type = NULL
+addata = merge(addata, tempdf, by="key", all = TRUE)
+addata[is.na(addata)] = 0
+
+#apply all_vidp25 on addata
+tempdf = data.frame(all_vidp25)
+names(tempdf)[2] = 'p25_view'
+tempdf$action_type = NULL
+addata = merge(addata, tempdf, by="key", all = TRUE)
+addata[is.na(addata)] = 0
+
+#apply all_vidp50 on addata
+tempdf = data.frame(all_vidp50)
+names(tempdf)[2] = 'p50_view'
+tempdf$action_type = NULL
+addata = merge(addata, tempdf, by="key", all = TRUE)
+addata[is.na(addata)] = 0
+
+#apply all_vidp75 on addata
+tempdf = data.frame(all_vidp75)
+names(tempdf)[2] = 'p75_view'
+tempdf$action_type = NULL
+addata = merge(addata, tempdf, by="key", all = TRUE)
+addata[is.na(addata)] = 0
+
+#apply all_vidp95 on addata
+tempdf = data.frame(all_vidp95)
+names(tempdf)[2] = 'p95_view'
+tempdf$action_type = NULL
+addata = merge(addata, tempdf, by="key", all = TRUE)
+addata[is.na(addata)] = 0
+
+}
+
+addata$video_3s <- addata$video_view
+addata$video_view = NULL
+
+addata$actions = NULL
+addata$video_10_sec_watched_actions = NULL
+addata$video_30_sec_watched_actions = NULL
+addata$video_p25_watched_actions = NULL
+addata$video_p50_watched_actions = NULL
+addata$video_p75_watched_actions = NULL
+addata$video_p95_watched_actions = NULL
+
+addata$spend = addata$spend %>% as.numeric()
+
+for(i in 22:ncol(addata)){
+  addata[[i]] = addata[[i]] %>% as.numeric()
+}
+
+ytd_fbdata = as.data.frame(addata)
+save(ytd_fbdata, file = "C:/Users/ksinteppadon/Documents/R/Basecamp/ytd_fbdashboard.RData")
+
+addata_all = rbind(addata_all, addata, fill = TRUE)
+
+totabl = as.data.frame(addata_all)
+save(totabl, file = "fbdashboard.RData")
+save(totabl, file = "C:/Users/ksinteppadon/Documents/R/Basecamp/fbdashboard.RData")
+save(totabl, file = "//hk-agdbc-2007/ExternalDataSource/Branding/fbdashboard.RData")
+
+
+#save backup
+bkup = paste0("//bk-agfil-1001/Department/MK/Demand Innovation/Social and Display Experiments/Insights/RData/fbdashboard_", Sys.Date(), ".RData")
+save(totabl, file = bkup)
+
+
+# write csv file
+file <- sprintf("fbdashboard_output_%s" , Sys.Date()-1)
+Sys.sleep(1)
+setwd("//bk-agfil-1001/Department/MK/Demand Innovation/Social and Display Experiments/Insights/2017 Q1 IDN Campaign")
+write.table(addata_all , paste0(file,".csv") , row.names = FALSE , sep = "," )
+
+
