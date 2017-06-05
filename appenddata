@@ -71,41 +71,62 @@ str_start = function(ucname, title){ #ucname = uncleaned name; title = abbrv of 
 }
 
 str_ends = function(ucname, title){ #ucname = uncleaned name; title = abbrv of title (PH, CV,...)
-  ifelse(grepl(title, ucname), return (regexpr("_", ucname)-1 %>%  as.numeric()), return (-1))
+  pos = regexpr(title, ucname)
+  ucname = substr(ucname, pos, nchar(ucname))
+  ifelse(grepl(title, ucname), return (regexpr("_", ucname)-1+pos %>%  as.numeric()), return (-1))
+}
+
+tdetected = function(ucname, title){
+  tchar = nchar(title)
+  spos = str_start(ucname, title)
+  epos = str_ends(ucname, title)
+  return(substr(ucname, spos, epos-1))
+}
+
+ndetected = function(ucname, title){
+  tchar = nchar(title)
+  spos = str_start(ucname, title)
+  epos = str_ends(ucname, title)
+  return(paste0(substr(ucname,0,spos-tchar-1), substr(ucname,epos+1,nchar(ucname)))) #concat the rest of the name together
 }
 
 #Campaign
 addata$nametemp = addata$campaign_name
+addata$nametemp = paste0(addata$nametemp, "_")
 
+addata$Campaign = ifelse ( str_detect(addata$nametemp,"CA-"), tdetected(addata$nametemp,"CA-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"CA-"), ndetected(addata$nametemp,"CA-"),addata$nametemp)
 
-addata$Campaign = substr(addata$nametemp, regexpr("CA",addata$nametemp)+3, regexpr("_", addata$nametemp)-1)
-addata$nametemp = substr(addata$nametemp, regexpr("_", addata$nametemp) + 1, nchar(addata$nametemp))
+addata$Phase = ifelse ( str_detect(addata$nametemp,"PH-"), tdetected(addata$nametemp,"PH-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"PH-"), ndetected(addata$nametemp,"PH-"),addata$nametemp)
 
-addata$Phase = substr(addata$nametemp, regexpr("PH",addata$nametemp)+3, regexpr("_", addata$nametemp)-1)
-addata$nametemp = substr(addata$nametemp, regexpr("_", addata$nametemp) + 1, nchar(addata$nametemp))
-
-addata$Channel = substr(addata$nametemp, regexpr("C",addata$nametemp)+2, regexpr("_", addata$nametemp)-1)
-addata$nametemp = substr(addata$nametemp, regexpr("_", addata$nametemp) + 1, nchar(addata$nametemp))
+addata$Channel = ifelse ( str_detect(addata$nametemp,"C-"), tdetected(addata$nametemp,"C-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"C-"), ndetected(addata$nametemp,"C-"),addata$nametemp)
+# 
+# addata$Usergroup = ifelse ( str_detect(addata$nametemp,"UG-"), tdetected(addata$nametemp,"UG-"),"")
+# addata$nametemp = ifelse ( str_detect(addata$nametemp,"UG-"), ndetected(addata$nametemp,"UG-"),addata$nametemp)
+# 
+# addata$Buying = ifelse ( str_detect(addata$nametemp,"B-"), tdetected(addata$nametemp,"B-"),"")
+# addata$nametemp = ifelse ( str_detect(addata$nametemp,"B-"), ndetected(addata$nametemp,"B-"),addata$nametemp)
 
 #Adset
 
 
 addata$nametemp = substr(addata$adset_name, regexpr("_A-", addata$adset_name)+1, nchar(addata$adset_name))
-#addata$nametemp = ifelse(str_detect(addata$adset_name, "_A"),  substr(addata$adset_name, regexpr("_A", addata$adset_name)+1, nchar(addata$adset_name)), addata$ad_name)
 addata$nametemp = paste0(addata$nametemp, "_")
 
 
-addata$Audience = ifelse ( str_detect(addata$nametemp,"A-"), substr(addata$nametemp, str_start(addata$nametemp, "A-"), str_ends(addata$nametemp, "A-")),"")
-addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+addata$Audience = ifelse ( str_detect(addata$nametemp,"A-"), tdetected(addata$nametemp,"A-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"A-"), ndetected(addata$nametemp,"A-"),addata$nametemp)
 
-addata$Placement = ifelse ( str_detect(addata$nametemp,"PL-"), substr(addata$nametemp, str_start(addata$nametemp, "PL-"), str_ends(addata$nametemp, "PL-")),"")
-addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
-  
-addata$Geo = ifelse ( str_detect(addata$nametemp,"G-"), substr(addata$nametemp, str_start(addata$nametemp, "G-"), str_ends(addata$nametemp, "_G-")),"")
-addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+addata$Placement = ifelse ( str_detect(addata$nametemp,"PL-"), tdetected(addata$nametemp,"PL-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"PL-"), ndetected(addata$nametemp,"PL"),addata$nametemp)
 
-addata$Language = ifelse( str_detect(addata$nametemp,"_L-"), substr(addata$nametemp, str_start(addata$nametemp, "_L-"), str_ends(addata$nametemp, "_L-")),"")
-addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+addata$Geo =ifelse (!str_detect(addata$nametemp,"UG-") & str_detect(addata$nametemp,"G-"), tdetected(addata$nametemp,"G-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"G-"), ndetected(addata$nametemp,"G-"),addata$nametemp)
+
+addata$Language = ifelse ( str_detect(addata$nametemp,"L-"), tdetected(addata$nametemp,"L-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"L-"), ndetected(addata$nametemp,"L-"),addata$nametemp)
 
 
 #Advert
@@ -113,20 +134,22 @@ addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addat
 addata$nametemp = ifelse(str_detect(addata$ad_name, "_CR"),  substr(addata$ad_name, regexpr("_CR", addata$ad_name)+1, nchar(addata$ad_name)), addata$ad_name)
 addata$nametemp = paste0(addata$nametemp, "_")
 
-addata$Creative = ifelse ( str_detect(addata$nametemp,"CR-"), substr(addata$nametemp, str_start(addata$nametemp, "CR-"), str_ends(addata$nametemp, "CR-")),"")
-#addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
-addata$nametemp = ifelse(str_detect(addata$ad_name, "CR-"),  substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
+addata$Creative = ifelse ( str_detect(addata$nametemp,"CR-"), tdetected(addata$nametemp,"CR-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"CR-"), ndetected(addata$nametemp,"CR-"),addata$nametemp)
 
 #shitty coded, will clean later
-addata$nametemp = ifelse(str_detect(addata$nametemp, "CV-"), substr(addata$nametemp, regexpr("CV-", addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
-addata$Copy_variant = ifelse ( str_detect(addata$nametemp,"CV-"), substr(addata$nametemp, str_start(addata$nametemp, "CV-"), str_ends(addata$nametemp, "CV-")),"")
-addata$nametemp = ifelse(str_detect(addata$ad_name, "CV"),  substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
+# addata$nametemp = ifelse(str_detect(addata$nametemp, "CV-"), substr(addata$nametemp, regexpr("CV-", addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
+# addata$Copy_variant = ifelse ( str_detect(addata$nametemp,"CV-"), substr(addata$nametemp, str_start(addata$nametemp, "CV-"), str_ends(addata$nametemp, "CV-")),"")
+# addata$nametemp = ifelse(str_detect(addata$ad_name, "CV"),  substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp)), addata$nametemp)
 
-addata$Creative_type = ifelse ( str_detect(addata$nametemp,"CT"), substr(addata$nametemp, str_start(addata$nametemp, "CT-"), str_ends(addata$nametemp, "CT-")),"")
-addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+addata$Copy_variant = ifelse ( str_detect(addata$nametemp,"CV-"), tdetected(addata$nametemp,"CV-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"CV-"), ndetected(addata$nametemp,"CV-"),addata$nametemp)
 
-addata$Content_pillar = ifelse ( str_detect(addata$nametemp,"CP"), substr(addata$nametemp, str_start(addata$nametemp, "CP-"), str_ends(addata$nametemp, "CP-")),"")
-addata$nametemp = substr(addata$nametemp, adv_with(addata$nametemp), nchar(addata$nametemp))
+addata$Creative_type = ifelse ( str_detect(addata$nametemp,"CT-"), tdetected(addata$nametemp,"CT-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"CT-"), ndetected(addata$nametemp,"CT-"),addata$nametemp)
+
+addata$Content_pillar = ifelse ( str_detect(addata$nametemp,"CP-"), tdetected(addata$nametemp,"CP-"),"")
+addata$nametemp = ifelse ( str_detect(addata$nametemp,"CP-"), ndetected(addata$nametemp,"CP-"),addata$nametemp)
 
 addata$nametemp = NULL
 
@@ -263,18 +286,27 @@ tempdf$action_type = NULL
 addata = merge(addata, tempdf, by="key", all = TRUE)
 addata[is.na(addata)] = 0
 
-}
-
-addata$video_3s <- addata$video_view
-addata$video_view = NULL
-
-addata$actions = NULL
 addata$video_10_sec_watched_actions = NULL
 addata$video_30_sec_watched_actions = NULL
 addata$video_p25_watched_actions = NULL
 addata$video_p50_watched_actions = NULL
 addata$video_p75_watched_actions = NULL
 addata$video_p95_watched_actions = NULL
+}
+
+if(sum(addata$video_view %>% as.numeric) == 0){
+  addata$view_30 = 0
+  addata$view_10 = 0
+  addata$p25_view = 0
+  addata$p50_view = 0
+  addata$p75_view = 0
+  addata$p95_view = 0
+}
+
+addata$video_3s <- addata$video_view
+addata$video_view = NULL
+
+addata$actions = NULL
 
 addata$spend = addata$spend %>% as.numeric()
 
@@ -282,8 +314,9 @@ for(i in 22:ncol(addata)){
   addata[[i]] = addata[[i]] %>% as.numeric()
 }
 
-ytd_fbdata = as.data.frame(addata)
-save(ytd_fbdata, file = "C:/Users/ksinteppadon/Documents/R/Basecamp/ytd_fbdashboard.RData")
+
+ytd_fbtable = as.data.frame(addata)
+save(ytd_fbtable, file = "C:/Users/ksinteppadon/Documents/R/Basecamp/ytd_fbdashboard.RData")
 
 addata_all = rbind(addata_all, addata, fill = TRUE)
 
@@ -303,5 +336,3 @@ file <- sprintf("fbdashboard_output_%s" , Sys.Date()-1)
 Sys.sleep(1)
 setwd("//bk-agfil-1001/Department/MK/Demand Innovation/Social and Display Experiments/Insights/2017 Q1 IDN Campaign")
 write.table(addata_all , paste0(file,".csv") , row.names = FALSE , sep = "," )
-
-
