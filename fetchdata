@@ -32,7 +32,7 @@ Sys.setenv('HTTR_SERVER_PORT' = '1410/')
 sessionInfo()
 
 
-app <- oauth_app('facebook', '542369425788563', '67c2922f40820a96ec04e9db4d2ce018')
+app <- oauth_app('facebook', 'id', 'secret')
 
 #Get data for every ads account in acc
 data.all <- data.frame()
